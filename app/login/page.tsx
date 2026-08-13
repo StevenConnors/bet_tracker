@@ -1,0 +1,2 @@
+import { signIn } from "@/auth";
+export default function Login() { return <main className="auth"><section className="auth-card"><p className="eyebrow">STAKEOUT</p><h1>Friendly stakes.<br />No loose ends.</h1><p>Track the bets you make with friends, without involving money or awkward reminders.</p><form action={async (formData) => { "use server"; await signIn("nodemailer", formData); }}><label>Email address<input name="email" type="email" placeholder="you@example.com" required /></label><button>Send me a sign-in link</button></form></section></main>; }
