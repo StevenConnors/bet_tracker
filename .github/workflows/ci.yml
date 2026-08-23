@@ -38,7 +38,7 @@ jobs:
       RESEND_API_KEY: ci-build-placeholder
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -76,7 +76,7 @@ jobs:
       E2E_MONGODB_URI: mongodb://127.0.0.1:27018/stakeout_e2e
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
