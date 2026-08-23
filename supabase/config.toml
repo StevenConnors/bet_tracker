@@ -1,0 +1,48 @@
+project_id = "stakeout"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = true
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://localhost:3000/login/verify", "http://127.0.0.1:3000/login/verify", "http://127.0.0.1:3100/login/verify"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.rate_limit]
+email_sent = 100
+token_verifications = 30
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 600
+# Keep automated local runs repeatable; the UI enforces 60s and hosted projects must use 60s.
+max_frequency = "1s"
+
+[auth.email.template.magic_link]
+subject = "Your Stakeout sign-in code"
+content_path = "./supabase/templates/magic_link.html"

@@ -6,3 +6,6 @@ coverage
 .local
 test-results
 playwright-report
+*.tsbuildinfo
+supabase/.branches/
+supabase/.temp/

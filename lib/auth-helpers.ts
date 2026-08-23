@@ -1,19 +1,21 @@
 import { ObjectId } from "mongodb";
-import { auth } from "@/auth";
 import { db } from "@/lib/mongodb";
+import { createClient } from "@/lib/supabase/server";
 import type { AppUser } from "@/lib/types";
 
 export async function currentUser(): Promise<AppUser | null> {
-  const session = await auth();
-  if (!session?.user?.email) return null;
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user?.email) return null;
   const database = await db();
-  const email = session.user.email.toLowerCase();
+  const email = user.email.toLowerCase();
+  const name = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
   const role = process.env.ADMIN_EMAIL?.toLowerCase() === email ? "admin" : "user";
   await database.collection<AppUser>("appUsers").updateOne(
     { email },
     role === "admin"
-      ? { $setOnInsert: { email, name: session.user.name ?? undefined, createdAt: new Date() }, $set: { role } }
-      : { $setOnInsert: { email, name: session.user.name ?? undefined, role, createdAt: new Date() } },
+      ? { $setOnInsert: { email, name, createdAt: new Date() }, $set: { role } }
+      : { $setOnInsert: { email, name, role, createdAt: new Date() } },
     { upsert: true },
   );
   return database.collection<AppUser>("appUsers").findOne({ email });
