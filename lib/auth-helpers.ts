@@ -9,7 +9,8 @@ export async function currentUser(): Promise<AppUser | null> {
   if (error || !user?.email) return null;
   const database = await db();
   const email = user.email.toLowerCase();
-  const name = typeof user.user_metadata?.name === "string" ? user.user_metadata.name : undefined;
+  const metadataName = user.user_metadata?.full_name ?? user.user_metadata?.name;
+  const name = typeof metadataName === "string" && metadataName.trim() ? metadataName.trim() : undefined;
   const role = process.env.ADMIN_EMAIL?.toLowerCase() === email ? "admin" : "user";
   await database.collection<AppUser>("appUsers").updateOne(
     { email },

@@ -1,37 +1,5 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
-
-type MessageSummary = { ID: string; Subject?: string; To?: { Address: string }[] };
-
-async function messageIds(email: string) {
-  const list = await fetch("http://127.0.0.1:54324/api/v1/messages").then(response => response.json());
-  return new Set<string>((list.messages || []).filter((item: MessageSummary) => item.To?.some(to => to.Address === email)).map((item: MessageSummary) => item.ID));
-}
-
-async function signIn(browser: Browser, email: string) {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  const existing = await messageIds(email);
-  await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByRole("button", { name: "Send my sign-in code" }).click();
-  let link: string | undefined;
-  for (let attempt = 0; attempt < 80 && !link; attempt += 1) {
-    const list = await fetch("http://127.0.0.1:54324/api/v1/messages").then(response => response.json());
-    const summary = list.messages?.find((item: MessageSummary) => !existing.has(item.ID) && item.Subject === "Your Stakeout sign-in code" && item.To?.some(to => to.Address === email));
-    if (summary?.ID) {
-      const message = await fetch(`http://127.0.0.1:54324/api/v1/message/${summary.ID}`).then(response => response.json());
-      link = `${message.HTML || ""}\n${message.Text || ""}`.replace(/&amp;/g, "&").match(/https?:\/\/[^\s<"]+token_hash=[^\s<"]+/)?.[0];
-    }
-    if (!link) await new Promise(resolve => setTimeout(resolve, 250));
-  }
-  if (!link) throw new Error(`No sign-in link received for ${email}`);
-  const url = new URL(link);
-  url.host = "127.0.0.1:3100";
-  await page.goto(url.toString());
-  await page.getByRole("button", { name: "Continue to Stakeout" }).click();
-  await expect(page.getByText("Keep the score.")).toBeVisible();
-  return { context, page };
-}
+import { expect, test, type Page } from "@playwright/test";
+import { signIn } from "./auth-helper";
 
 async function createRegisteredBet(page: Page, participantEmail: string, condition: string) {
   const draft = { condition, wager: "Winner chooses brunch.", deadline: "2030-06-01T12:00:00.000Z", participantEmails: [participantEmail] };

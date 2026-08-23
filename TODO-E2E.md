@@ -4,9 +4,9 @@ This document tracks browser coverage to add or strengthen. The current suite co
 
 ## Automation Status
 
-The first implementation pass now contains 20 passing Playwright tests across `auth.spec.ts`, `bet-flow.spec.ts`, `bet-behavior.spec.ts`, and `admin.spec.ts`. They cover the deterministic local versions of the highest-risk flows below: both passwordless methods, generic invalid credentials, resend, sign-out, route protection, review/confirmation, registered and unregistered participants, mixed groups, stale reviews, private invite links, outsider isolation, lifecycle states, overdue display, validation boundaries, activity privacy/limits, admin role management and moderation, request-failure recovery, simultaneous resolution, and a mobile keyboard/overflow check.
+The implemented Playwright suite spans `auth.spec.ts`, `bet-flow.spec.ts`, `bet-behavior.spec.ts`, and `admin.spec.ts`. It covers Google OAuth initiation and callback safety, generic callback failure, session persistence and sign-out, route protection, review/confirmation, registered and unregistered participants, mixed groups, stale reviews, private invite links, outsider isolation, lifecycle states, overdue display, validation boundaries, activity privacy/limits, admin role management and moderation, request-failure recovery, simultaneous resolution, and a mobile keyboard/overflow check.
 
-The detailed scenarios remain in this document because several are broader than a single test. Production mailbox-provider smoke tests, truly expired or externally revoked sessions, delivery-provider outages, full assistive-technology audits, and Firefox/WebKit projects still require dedicated environments or a later test-infrastructure pass.
+The detailed scenarios remain because several are broader than a single test. A real Google consent-screen smoke test, externally revoked sessions, delivery-provider outages, full assistive-technology audits, and Firefox/WebKit projects still require dedicated environments or a later test-infrastructure pass. Automated identities intentionally use local Supabase session bootstrap rather than a real Google account.
 
 ## Strengthen the Existing Happy Path
 
@@ -34,57 +34,37 @@ The current test clicks **Complete**, but its final assertion only confirms that
 
 ## Authentication
 
-### Sign in with the six-digit code
+### Start Google OAuth
 
-- Request a sign-in email.
-- Read the OTP from the captured message.
-- Enter a valid six-digit code on the verification page.
-- Confirm the user reaches the dashboard with an authenticated session.
-- Refresh the dashboard and confirm the session remains active.
+- Select **Continue with Google**.
+- Confirm Supabase receives `provider=google`.
+- Confirm the OAuth request carries the exact application `/auth/callback` URL.
+- Confirm the original protected internal path is retained as `next`.
+- Supply an external, protocol-relative, backslash, or JavaScript `next` value and confirm it is replaced with `/`.
 
-### Sign in with the review link
+### Complete Google OAuth
 
-- Confirm opening the emailed link initially shows **Ready to sign in?**.
-- Confirm merely opening the link does not authenticate the browser.
-- Click **Continue to Stakeout** and confirm authentication succeeds.
-- Confirm the token cannot be reused after successful verification.
+- In a staging smoke test, choose a permitted Google account and complete consent.
+- Confirm Google returns through the Supabase project callback and the application exchanges the PKCE code exactly once.
+- Confirm the user reaches the intended internal page with an authenticated cookie session.
+- Refresh the page and confirm the session remains active.
+- Confirm the Google display name and normalized email are reflected in the application user without creating a duplicate.
 
-### Invalid or expired authentication credentials
+### Cancelled, invalid, or expired OAuth callback
 
-- Submit an incorrect six-digit code and confirm a generic error is displayed.
-- Open an invalid token link and confirm the same generic error is displayed.
-- Open an expired code or link and confirm it is rejected.
-- Confirm a failed attempt does not create an authenticated session.
-- Confirm the UI remains usable for another attempt.
+- Cancel the Google chooser or consent screen.
+- Open the application callback without a code and with an invalid or expired code.
+- Confirm each attempt returns to login with the same generic error.
+- Confirm provider error details and codes are not exposed to the user.
+- Confirm no authenticated session or MongoDB application user is created.
+- Confirm the login button remains usable for another attempt.
 
-### Code input behavior
+### Google account selection for an invitation
 
-- Confirm non-numeric characters are removed or rejected.
-- Confirm no more than six digits can be entered.
-- Confirm the sign-in button remains disabled until six digits are present.
-- Confirm submitting with the Enter key works when the code is complete.
-
-### Resend the authentication email
-
-- Confirm resend is disabled during the 60-second countdown.
-- Confirm the countdown reaches zero and enables **Send a new code**.
-- Request a new code and confirm a new message is delivered.
-- Confirm the old code or link follows the intended invalidation behavior.
-- Confirm the new code and link work.
-- Confirm resend failures do not leak whether an account or mailbox exists.
-
-### Use another email
-
-- Start a login for one address.
-- Select **Use another email**.
-- Confirm the user returns to the login form.
-- Request authentication for the second address and confirm it signs in as the correct user.
-
-### Email normalization
-
-- Submit an address with uppercase characters and surrounding whitespace.
-- Confirm it signs in to the normalized lowercase account.
-- Confirm it does not create a duplicate application user.
+- Open an invitation for an unregistered address.
+- Choose the Google account with the invited normalized email and confirm access is granted.
+- Repeat with a different Google account and confirm the private bet remains hidden behind a privacy-preserving 404.
+- If Google returns an alias or alternate email, confirm the product's exact matching policy is enforced and documented.
 
 ### Sign out
 
@@ -96,7 +76,7 @@ The current test clicks **Complete**, but its final assertion only confirms that
 ### Post-login redirects
 
 - Visit a protected internal destination such as `/admin` while signed out.
-- Sign in with an authorized account and confirm the user reaches the intended internal destination if that behavior is supported.
+- Complete Google login with an authorized account and confirm the user reaches the intended internal destination if that behavior is supported.
 - Supply an external, protocol-relative, or JavaScript `next` value and confirm the user is redirected only within the application.
 
 ## Route and Session Protection
@@ -182,8 +162,8 @@ The current E2E test covers local Mailpit delivery and the basic private-link jo
 The core redirect flow is covered and should remain protected.
 
 - Open the private bet link in a signed-out browser.
-- Confirm the browser redirects to passwordless login with the exact bet path encoded as the internal `next` destination.
-- Complete signup using the same normalized email address that was invited.
+- Confirm the browser redirects to Google login with the exact bet path encoded as the internal `next` destination.
+- Complete signup using the Google account for the same normalized email address that was invited.
 - Confirm the user returns directly to the original `/bets/[id]` page, not merely the dashboard.
 - Confirm the new account can see the bet in its dashboard after signup.
 - Confirm the invitee can see participant details and subsequent status or activity updates.
@@ -456,12 +436,12 @@ The suite currently verifies that one outsider cannot list or directly retrieve 
 
 - Run critical happy paths in Chromium, Firefox, and WebKit if those browsers are supported.
 - Add at least one mobile viewport project if mobile use is supported.
-- Confirm date inputs, session cookies, and passwordless authentication behave consistently.
+- Confirm date inputs, session cookies, and Google OAuth callback behavior work consistently.
 
 ## Suggested Implementation Order
 
 1. Strengthen the existing completion assertions.
-2. Add six-digit login and sign-out coverage.
+2. Add a staging Google OAuth smoke test and preserve automated session/sign-out coverage.
 3. Extend the existing invitation test with email-content, wrong-email, and mutation-isolation assertions.
 4. Cover mixed registered/unregistered groups and account-status changes between review and confirmation.
 5. Cover completed, unresolved, cancelled, and overdue states.

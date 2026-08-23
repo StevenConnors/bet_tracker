@@ -17,18 +17,30 @@ export default async function setup() {
   const externalMongoUri = process.env.E2E_MONGODB_URI;
   if (!externalMongoUri) { await rm(`${root}/.local/e2e-mongo`, { recursive: true, force: true }); await mkdir(`${root}/.local/e2e-mongo`, { recursive: true }); }
   await rm(`${root}/.next-e2e`, { recursive: true, force: true });
-  execFileSync("npx", ["supabase", "start", "-x", "studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector"], { cwd: root, stdio: "inherit" });
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    try { execFileSync("docker", ["exec", "supabase_auth_stakeout", "wget", "-q", "--spider", "http://supabase_kong_stakeout:8088/email/magic_link.html"], { stdio: "ignore" }); break; }
-    catch { if (attempt === 39) throw new Error("Local authentication email template did not become ready"); await new Promise(resolve => setTimeout(resolve, 250)); }
-  }
-  const output = execFileSync("npx", ["supabase", "status", "-o", "env"], { cwd: root, encoding: "utf8" });
+  execFileSync("npx", ["supabase", "start", "-x", "studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector"], {
+    cwd: root,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: "stakeout-e2e.apps.googleusercontent.com",
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET: "stakeout-e2e-secret",
+    },
+  });
+  const output = execFileSync("npx", ["supabase", "status", "-o", "env"], {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: "stakeout-e2e.apps.googleusercontent.com",
+      SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET: "stakeout-e2e-secret",
+    },
+  });
   const local = Object.fromEntries([...output.matchAll(/^([A-Z_]+)="(.*)"$/gm)].map(([, key, value]) => [key, value]));
-  if (!local.API_URL || !local.ANON_KEY) throw new Error("Could not read local Supabase credentials");
+  if (!local.API_URL || !local.ANON_KEY || !local.SERVICE_ROLE_KEY) throw new Error("Could not read local Supabase credentials");
   const mongo = externalMongoUri ? undefined : spawn("mongod", ["--dbpath", `${root}/.local/e2e-mongo`, "--bind_ip", "127.0.0.1", "--port", "27018", "--quiet"], { detached: process.platform !== "win32", stdio: "ignore" });
   const mongoUrl = new URL(externalMongoUri || "mongodb://127.0.0.1:27018/stakeout_e2e");
   const mongoPort = Number(mongoUrl.port || 27017);
-  const next = spawn("npm", ["run", "dev", "--", "--port", "3100"], { detached: process.platform !== "win32", stdio: "ignore", env: { ...process.env, APP_ORIGIN: "http://127.0.0.1:3100", INVITE_EMAIL_PROVIDER: "mailpit", INVITE_EMAIL_FROM: "Stakeout <invites@stakeout.local>", MAILPIT_SMTP_HOST: "127.0.0.1", MAILPIT_SMTP_PORT: "54325", MONGODB_URI: mongoUrl.toString(), NEXT_DIST_DIR: ".next-e2e", NEXT_PUBLIC_SUPABASE_URL: local.API_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY, ADMIN_EMAIL: "admin@example.test" } });
+  const next = spawn("npm", ["run", "dev", "--", "--port", "3100"], { detached: process.platform !== "win32", stdio: "ignore", env: { ...process.env, APP_ORIGIN: "http://127.0.0.1:3100", INVITE_EMAIL_PROVIDER: "mailpit", INVITE_EMAIL_FROM: "Stakeout <invites@stakeout.local>", MAILPIT_SMTP_HOST: "127.0.0.1", MAILPIT_SMTP_PORT: "54325", MONGODB_URI: mongoUrl.toString(), NEXT_DIST_DIR: ".next-e2e", NEXT_PUBLIC_SUPABASE_URL: local.API_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY: local.ANON_KEY, SUPABASE_SERVICE_ROLE_KEY: local.SERVICE_ROLE_KEY, E2E_AUTH_SECRET: "stakeout-e2e-auth", ADMIN_EMAIL: "admin@example.test" } });
   try {
     await Promise.all([waitForPort(mongoPort), waitForPort(3100)]);
   } catch (error) {
