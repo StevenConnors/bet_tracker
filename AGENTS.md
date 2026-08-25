@@ -4,14 +4,15 @@ These instructions apply to the entire repository. Treat this file as living doc
 
 ## Project Context
 
-Stakeout is a Next.js 15 App Router application for tracking friendly bets. It uses React 19 and strict TypeScript, Google social login through Supabase Auth, MongoDB application storage, Vitest unit tests, and Playwright end-to-end tests. Node.js 22 is required.
+Stakeout is a Next.js 15 App Router application for tracking friendly bets. It uses React 19 and strict TypeScript, Google social login through Supabase Auth, MongoDB application storage, one-way username-based friend lists, Vitest unit tests, and Playwright end-to-end tests. Node.js 22 is required.
 
 The main request flow is:
 
 1. Supabase completes Google OAuth with PKCE and stores the session in cookies.
 2. `currentUser()` validates the session and upserts the user in MongoDB.
 3. Server pages and API routes independently enforce authentication and authorization.
-4. Bet mutations also create user-visible audit records in `activities`.
+4. Usernames are unique lookup handles, while Supabase user IDs, application user IDs, friendships, and registered bet participants provide stable identity across username or email changes.
+5. Bet mutations also create user-visible audit records in `activities`.
 
 Important paths:
 

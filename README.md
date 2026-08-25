@@ -1,6 +1,6 @@
 # Stakeout
 
-Stakeout is a small web app for tracking friendly bets. Users can create bets with registered friends, invite people who have not joined yet, set deadlines, record outcomes, and review recent activity. Admins can manage roles and cancel bets.
+Stakeout is a small web app for tracking friendly bets. Users add one-way friends by username, select those friends when creating bets, optionally invite people who have not joined yet by email, set deadlines, record outcomes, and review recent activity. Admins can manage roles and cancel bets.
 
 ## Stack
 
@@ -27,7 +27,7 @@ npm run local
 
 `npm run local` checks that ports 3000 and 27017 are free, loads `.env.local`, verifies Docker and MongoDB, clears the Next.js development cache, and starts local Supabase, MongoDB, and Next.js. Wait for **Stakeout is ready**, then open [the login page](http://127.0.0.1:3000/login).
 
-Unregistered addresses can be included when a bet is confirmed. The invitation contains a private bet link and tells the recipient to continue with the Google account for the invited email address. Local invitations are captured by [Mailpit](http://127.0.0.1:54324) and never leave the machine.
+Add registered users from the Friends page using the exact username they share with you; Stakeout does not expose a user directory or autocomplete account search. Friend lists are private and one-way. Unregistered addresses can still be included when a bet is confirmed. The invitation contains a private bet link and tells the recipient to continue with the Google account for the invited email address. Local invitations are captured by [Mailpit](http://127.0.0.1:54324) and never leave the machine.
 
 Press Ctrl+C in the launcher terminal to stop Next.js and MongoDB. Run `npx supabase stop` when you also want to stop the local Supabase containers. If port 3000 is occupied, identify the exact listener with `lsof -nP -iTCP:3000 -sTCP:LISTEN` before stopping it.
 
@@ -47,14 +47,16 @@ For separate terminals, export the two `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` variabl
 ## Authentication and data flow
 
 1. The login page asks Supabase to start Google OAuth with a PKCE callback to `/auth/callback`.
-2. Google returns through Supabase; the application callback exchanges the one-time code for an HTTP-only cookie session and upserts the normalized email and Google display name in MongoDB.
-3. New accounts confirm their visible name on `/profile`; safe invitation destinations resume after setup.
+2. Google returns through Supabase; the application callback exchanges the one-time code for an HTTP-only cookie session and links the stable Supabase user ID, normalized email, and Google display name to an application user in MongoDB.
+3. New accounts choose a visible name and unique username on `/profile`; safe invitation destinations resume after setup. Both fields can be changed later.
 4. `currentUser()` validates subsequent sessions. Server pages protect `/`, `/bets/[id]`, `/admin`, and `/profile`; API routes independently repeat authentication and authorization checks.
-5. The dashboard calls `/api/bets` and `/api/activities`. Bet changes create records in the `activities` collection.
+5. The Friends page performs exact username lookups and stores one-way relationships by immutable application user ID, so a later username or email change does not break the relationship.
+6. The dashboard calls `/api/bets`, `/api/friends`, and `/api/activities`. Friend IDs are authorized again during bet review and creation. Bet changes create records in the `activities` collection.
 
-MongoDB uses three collections:
+MongoDB uses four collections:
 
-- `appUsers`: email, visible name, role, and onboarding state
+- `appUsers`: stable Supabase identity, email, unique username, visible name, role, and onboarding state
+- `friendships`: one-way owner and friend user IDs
 - `bets`: creator, participants, terms, deadline, status, and outcome note
 - `activities`: user-visible audit entries for bet and admin actions
 

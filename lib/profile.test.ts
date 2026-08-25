@@ -3,13 +3,13 @@ import { accountDisplayName, DISPLAY_NAME_MAX_LENGTH, needsProfileSetup, profile
 
 describe("profileInputSchema", () => {
   it("trims a valid visible name", () => {
-    expect(profileInputSchema.parse({ name: "  Stevie C  " })).toEqual({ name: "Stevie C" });
+    expect(profileInputSchema.parse({ name: "  Stevie C  ", username: " Stevie_C " })).toEqual({ name: "Stevie C", username: "stevie_c" });
   });
 
   it("rejects empty, oversized, and control-character names", () => {
-    expect(profileInputSchema.safeParse({ name: "   " }).success).toBe(false);
-    expect(profileInputSchema.safeParse({ name: "x".repeat(DISPLAY_NAME_MAX_LENGTH + 1) }).success).toBe(false);
-    expect(profileInputSchema.safeParse({ name: "Line\nBreak" }).success).toBe(false);
+    expect(profileInputSchema.safeParse({ name: "   ", username: "valid_name" }).success).toBe(false);
+    expect(profileInputSchema.safeParse({ name: "x".repeat(DISPLAY_NAME_MAX_LENGTH + 1), username: "valid_name" }).success).toBe(false);
+    expect(profileInputSchema.safeParse({ name: "Line\nBreak", username: "valid_name" }).success).toBe(false);
   });
 });
 
