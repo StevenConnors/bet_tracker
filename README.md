@@ -1,21 +1,23 @@
 # Stakeout
 
-Stakeout is a small web app for tracking friendly bets. Users can create bets with registered friends, set deadlines, record outcomes, and review recent activity. Admins can manage roles and cancel bets.
+Stakeout is a small web app for tracking friendly bets. Users can create bets with registered friends, invite people who have not joined yet, set deadlines, record outcomes, and review recent activity. Admins can manage roles and cancel bets.
 
 ## Stack
 
 - Next.js 15 App Router, React 19, and TypeScript
-- Supabase passwordless authentication
+- Google social login through Supabase Auth
 - MongoDB application storage
+- Resend invitation email in production and Mailpit locally
 - Vitest unit tests and Playwright end-to-end tests
-
-Login emails contain a six-digit code and a scanner-safe link. Opening the link shows a review page; the token is used only after the user clicks **Continue**.
 
 ## Local development
 
-Requirements: Node.js 22, Docker Desktop running, and MongoDB (`mongod`) available on `PATH`.
+Requirements: Node.js 22, Docker Desktop running, MongoDB (`mongod`) on `PATH`, and a Google OAuth 2.0 web client.
 
-Run these commands from the checkout containing this README **and** `supabase/config.toml`. If you also have an older `bet_tracker` checkout, do not start the app there; that checkout does not contain this Supabase authentication work.
+1. Copy `.env.local.example` to `.env.local`.
+2. In Google Cloud, create an OAuth **Web application** client. Add `http://127.0.0.1:3000` as an authorized JavaScript origin and `http://127.0.0.1:54321/auth/v1/callback` as an authorized redirect URI.
+3. Put the client ID and client secret in `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` and `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET`. Set `ADMIN_EMAIL` to a Google account you can use locally if you need the admin UI.
+4. Start the stack:
 
 ```bash
 test -f supabase/config.toml
@@ -23,37 +25,32 @@ npm ci
 npm run local
 ```
 
-`npm run local` first checks that ports 3000 and 27017 are free, verifies Docker and MongoDB, clears the generated Next.js development cache, and then starts local Supabase, MongoDB, and Next.js in order. Do not open the browser until it prints **Stakeout is ready**. The launcher owns the processes it creates, so Ctrl+C terminates the complete Next.js and MongoDB process groups rather than leaving child processes behind.
+`npm run local` checks that ports 3000 and 27017 are free, loads `.env.local`, verifies Docker and MongoDB, clears the Next.js development cache, and starts local Supabase, MongoDB, and Next.js. Wait for **Stakeout is ready**, then open [the login page](http://127.0.0.1:3000/login).
 
-Request a login at [http://127.0.0.1:3000/login](http://127.0.0.1:3000/login), then inspect the captured message in Mailpit at [http://127.0.0.1:54324](http://127.0.0.1:54324). Exercise both the six-digit code and the review-link path. Creating a bet with an unregistered email also sends its invitation to Mailpit. Local messages never leave the machine.
+Unregistered addresses can be included when a bet is confirmed. The invitation contains a private bet link and tells the recipient to continue with the Google account for the invited email address. Local invitations are captured by [Mailpit](http://127.0.0.1:54324) and never leave the machine.
 
-Registered participants can join immediately. Unregistered addresses can be invited during the confirmation step and gain private access after signing in with the invited email. Sign in as `admin@example.test` to create the default local admin account.
+Press Ctrl+C in the launcher terminal to stop Next.js and MongoDB. Run `npx supabase stop` when you also want to stop the local Supabase containers. If port 3000 is occupied, identify the exact listener with `lsof -nP -iTCP:3000 -sTCP:LISTEN` before stopping it.
 
-Press Ctrl+C in the `npm run local` terminal to stop Next.js and MongoDB. Run `npx supabase stop` when you also want to stop the local Supabase containers. Supabase configuration and the shared auth-email template live under `supabase/`.
-
-If startup reports that port 3000 is occupied, identify the exact old process with `lsof -nP -iTCP:3000 -sTCP:LISTEN`; stop that process and rerun `npm run local`. The script will not start a second Next.js process against the same cache or port.
-
-For separate terminals, run `npx supabase start -x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector`, copy `API_URL` and `ANON_KEY` from `npx supabase status -o env` into the matching `NEXT_PUBLIC_` variables in `.env.local`, start MongoDB, and run `npm run dev`.
+For separate terminals, export the two `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` variables before starting Supabase. Copy `API_URL` and `ANON_KEY` from `npx supabase status -o env` into the matching `NEXT_PUBLIC_` variables in `.env.local`, start MongoDB, and run `npm run dev`.
 
 ## Code map
 
 | Path | Purpose |
 | --- | --- |
-| `app/` | Pages and API route handlers |
+| `app/` | Pages, the OAuth callback, and API route handlers |
 | `components/` | Client-side dashboard and admin UI |
-| `lib/` | Auth, database, API, and shared types |
-| `supabase/` | Local Supabase config and email template |
+| `lib/` | Auth, database, email, validation, and shared types |
+| `supabase/` | Local Supabase and Google-provider configuration |
 | `scripts/local.mjs` | Local service launcher |
-| `e2e/` | Playwright user-flow tests |
+| `e2e/` | Playwright user-flow tests and isolated service setup |
 
-## Request and data flow
+## Authentication and data flow
 
-1. Supabase verifies the login code or link and stores the session in cookies.
-2. `currentUser()` validates the session and upserts the user in MongoDB.
+1. The login page asks Supabase to start Google OAuth with a PKCE callback to `/auth/callback`.
+2. Google returns through Supabase; the application callback exchanges the one-time code for an HTTP-only cookie session and upserts the normalized email and Google display name in MongoDB.
 3. New accounts confirm their visible name on `/profile`; safe invitation destinations resume after setup.
-4. Server pages protect `/`, `/admin`, and `/profile`; API routes repeat authorization checks.
-5. The dashboard calls `/api/bets` and `/api/activities`.
-6. Bet changes create records in the `activities` collection.
+4. `currentUser()` validates subsequent sessions. Server pages protect `/`, `/bets/[id]`, `/admin`, and `/profile`; API routes independently repeat authentication and authorization checks.
+5. The dashboard calls `/api/bets` and `/api/activities`. Bet changes create records in the `activities` collection.
 
 MongoDB uses three collections:
 
@@ -65,48 +62,51 @@ The creator can change an open bet. Participants can view it. Admins can view an
 
 ## Configuration
 
-Copy `.env.local.example` for manual local setup or `.env.example` for hosted environments.
+Copy `.env.local.example` for local setup or `.env.example` for hosted environments.
 
 | Variable | Purpose |
 | --- | --- |
 | `MONGODB_URI` | MongoDB connection string and database |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser-safe Supabase key |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser-safe Supabase publishable/anonymous key |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` | Local Supabase Google OAuth client ID; configure the hosted value in the Supabase dashboard |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET` | Local Supabase Google OAuth secret; configure the hosted value in the Supabase dashboard |
+| `APP_ORIGIN` | Exact public application origin used in private invitation links |
 | `ADMIN_EMAIL` | Email that always receives the admin role |
+| `INVITE_EMAIL_PROVIDER` | `mailpit` locally or `resend` when hosted |
+| `INVITE_EMAIL_FROM` | Sender identity for invitation messages |
+| `RESEND_API_KEY` | Server-only Resend credential for hosted invitations |
 
-Do not commit `.env.local` or any service-role key.
+Do not commit `.env.local`, OAuth secrets, Supabase service-role keys, or Resend keys. The Google client secret belongs in Supabase—not Vercel—and the application does not need a service-role key in production.
 
 ## Development workflow
 
 Before opening a pull request, run:
 
 ```bash
-npm test
-npm run lint
-npm run build
+npm run ci
+npm run e2e
 ```
 
-Run `npm run e2e` after changes to authentication, APIs, or user flows. Add unit tests beside the module as `*.test.ts`; add browser flows under `e2e/`.
+`npm run ci` runs lint, strict TypeScript, unit tests, and a production build. Add unit tests beside modules as `*.test.ts`; add browser flows under `e2e/`.
 
 ## Continuous integration and deployment gates
 
-GitHub Actions runs two required-quality candidates for every pull request and every push to `main`:
+GitHub Actions runs two required-quality candidates for every pull request and push to `main`:
 
-- **Quality** installs from the lockfile, then runs lint, TypeScript, all unit tests, and a production Next.js build.
-- **E2E** starts isolated local Supabase/Mailpit and Next.js services, uses a MongoDB service container, and runs the complete Playwright suite in Chromium. Failure screenshots, traces, and reports are retained as workflow artifacts when available.
+- **Quality** installs from the lockfile, audits production dependencies for critical vulnerabilities, then runs lint, TypeScript, unit tests, and a production build.
+- **E2E** starts isolated local Supabase, Mailpit, and Next.js services, uses a MongoDB service container, and runs the Playwright suite in Chromium. Tests create synthetic local Supabase sessions through a secret-gated route that is unavailable in production; they never automate or receive a real Google account. The visible login test still verifies the Google authorization request and callback destination.
 
-The repository and Vercel builds use Node.js 22. Before merging, configure a GitHub ruleset for `main` that requires the `Quality` and `E2E` checks, requires the branch to be up to date, and prevents direct pushes or force-pushes. In Vercel, configure all production environment variables listed below and add the GitHub `Quality` and `E2E` statuses as required Deployment Checks so a successful build is not promoted to the production domain before CI passes. Vercel can also run the checked-in `lint` and `typecheck` scripts as native Deployment Checks.
+Failure screenshots, traces, and reports are retained as workflow artifacts when available. Protect `main` by requiring `Quality` and `E2E`, requiring the branch to be current, and blocking direct and force pushes. Add those statuses as required Vercel Deployment Checks so production promotion waits for CI.
 
-CI intentionally uses local disposable services and placeholder build-time values; it never receives production database, Supabase, or Resend credentials. Keep Vercel preview and production variables separate, and use a non-production Supabase project/database for preview deployments.
+CI uses disposable local services and placeholder build-time values. It never receives production MongoDB, Supabase, Google, or Resend credentials. Keep Vercel preview and production variables separate and use non-production data services for previews.
 
-## Production authentication
+## Production authentication and invitations
 
-1. Create separate Supabase projects for staging and production. Configure each Site URL and an exact allow list containing its `/login/verify` URL. Preview URLs should only be added as narrowly scoped entries when required.
-2. Set email OTP length to 6, expiry to 600 seconds, and minimum send interval to 60 seconds. The checked-in local config uses one second only so automated reruns are deterministic; the UI still enforces 60 seconds. Apply `supabase/templates/magic_link.html` to the Magic Link template in each hosted project.
-3. In Resend, verify a dedicated sending subdomain and publish its SPF and DKIM records plus a DMARC policy. Connect Resend to Supabase as the custom SMTP provider. The application also uses the Resend HTTPS API for bet invitations. Disable open and link tracking so authentication URLs are not rewritten.
-4. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `MONGODB_URI`, `APP_ORIGIN`, `ADMIN_EMAIL`, `INVITE_EMAIL_PROVIDER=resend`, `INVITE_EMAIL_FROM`, and `RESEND_API_KEY` in the deployment environment. `APP_ORIGIN` must be the exact public origin and is used for private bet links. The publishable/anonymous key is safe for the browser; never expose a Supabase service-role or Resend key.
-5. Monitor Resend deliveries, bounces, and complaints, but never log OTPs, token hashes, magic URLs, access tokens, or refresh tokens.
+1. Create separate Supabase projects for staging and production.
+2. In Google Cloud, configure the OAuth consent screen and a Web application client. Add each application origin to **Authorized JavaScript origins** and add `https://<project-ref>.supabase.co/auth/v1/callback` to **Authorized redirect URIs**.
+3. In Supabase **Authentication → Providers → Google**, enable Google and add that client ID and secret. In **URL Configuration**, set the exact application Site URL and allow its `/auth/callback` URL. Use narrowly scoped preview entries or a dedicated preview project rather than a broad production wildcard.
+4. In Vercel, set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `MONGODB_URI`, `APP_ORIGIN`, `ADMIN_EMAIL`, `INVITE_EMAIL_PROVIDER=resend`, `INVITE_EMAIL_FROM`, and `RESEND_API_KEY`. Do not add the Google secret or a Supabase service-role key.
+5. In Resend, verify a dedicated invitation-sending domain and publish SPF, DKIM, and DMARC records. Resend is used for bet invitations only; Google and Supabase handle authentication.
 
-Before release, smoke-test Gmail, Outlook, and another mailbox provider; verify SPF/DKIM/DMARC alignment; test both code and link flows; confirm link-prefetch GETs do not create a session; and confirm refresh and sign-out behavior.
-
-The end-to-end suite starts local Supabase and reads captured mail through Mailpit. It requires Docker and MongoDB and uses an isolated `.next-e2e` directory.
+Before release, test Google consent and callback behavior against each environment, an invited user with the matching Google email, a user who chooses the wrong Google account, refresh and sign-out, rejected external redirects, and invitation delivery to representative mailbox providers.

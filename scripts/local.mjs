@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { rm, mkdir } from "node:fs/promises";
 import net from "node:net";
 import { dirname, join } from "node:path";
+import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -32,7 +33,7 @@ async function waitForLogin(child) {
     if (child.exitCode !== null) throw new Error(`Next.js exited before becoming ready (code ${child.exitCode})`);
     try {
       const response = await fetch(`http://127.0.0.1:${appPort}/login`);
-      if (response.ok && (await response.text()).includes("Send my sign-in code")) return;
+      if (response.ok && (await response.text()).includes("Continue with Google")) return;
     } catch { /* Server is still starting. */ }
     await delay(250);
   }
@@ -64,6 +65,12 @@ process.on("SIGTERM", () => stop(0));
 
 try {
   if (process.cwd() !== root) console.warn(`Starting Stakeout from ${root}`);
+  try { loadEnvFile(join(root, ".env.local")); } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+  }
+  if (!process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID || !process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET) {
+    throw new Error("Add SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET to .env.local");
+  }
   if (await portIsOpen(appPort)) throw new Error(`Port ${appPort} is already in use. Stop the existing app server before running npm run local.`);
   if (await portIsOpen(mongoPort)) throw new Error(`Port ${mongoPort} is already in use. Stop the existing MongoDB process before running npm run local.`);
 
@@ -73,15 +80,6 @@ try {
   await rm(join(root, ".next"), { recursive: true, force: true });
 
   execFileSync("npx", ["--no-install", "supabase", "start", "-x", "studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector"], { cwd: root, stdio: "inherit" });
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    try {
-      execFileSync("docker", ["exec", "supabase_auth_stakeout", "wget", "-q", "--spider", "http://supabase_kong_stakeout:8088/email/magic_link.html"], { stdio: "ignore" });
-      break;
-    } catch {
-      if (attempt === 39) throw new Error("Local authentication email template did not become ready");
-      await delay(250);
-    }
-  }
 
   const status = execFileSync("npx", ["--no-install", "supabase", "status", "-o", "env"], { cwd: root, encoding: "utf8" });
   const local = Object.fromEntries([...status.matchAll(/^([A-Z_]+)="(.*)"$/gm)].map(([, key, value]) => [key, value]));

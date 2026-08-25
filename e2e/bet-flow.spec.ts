@@ -1,5 +1,6 @@
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
+import { authenticatePage, completeOnboarding, signIn } from "./auth-helper";
 
 type MessageSummary = { ID: string; Subject?: string; To?: { Address: string }[] };
 
@@ -21,38 +22,8 @@ async function waitForMessage(email: string, existing: Set<string>, subject: Reg
   throw new Error(`No matching email received for ${email}`);
 }
 
-async function signInLink(email: string, existing: Set<string>) {
-  const body = await waitForMessage(email, existing, /^Your Stakeout sign-in code$/);
-  const url = body.match(/https?:\/\/[^\s<"]+token_hash=[^\s<"]+/)?.[0];
-  if (!url) throw new Error(`No sign-in link received for ${email}`);
-  return url;
-}
-
 async function invitationMessage(email: string, existing: Set<string>) {
   return waitForMessage(email, existing, /invited you to a Stakeout bet$/);
-}
-
-async function finishEmailSignIn(page: Page, email: string, existing: Set<string>) {
-  const link = new URL(await signInLink(email, existing));
-  link.host = "127.0.0.1:3100";
-  await page.goto(link.toString());
-  await expect(page.getByText("Ready to sign in?")).toBeVisible();
-  await page.getByRole("button", { name: "Continue to Stakeout" }).click();
-  await expect(page.getByRole("heading", { name: "What should we call you?" })).toBeVisible();
-  await page.getByLabel("Visible name").fill(email);
-  await page.getByRole("button", { name: "Save and continue" }).click();
-}
-
-async function signIn(browser: Browser, email: string) {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  const existing = await messageIds(email);
-  await page.goto("/login");
-  await page.getByLabel("Email address").fill(email);
-  await page.getByRole("button", { name: "Send my sign-in code" }).click();
-  await finishEmailSignIn(page, email, existing);
-  await expect(page.getByText("Keep the score.")).toBeVisible();
-  return { context, page };
 }
 
 async function fillBet(page: Page, condition: string, participantEmail: string) {
@@ -130,6 +101,7 @@ test("an unregistered friend is invited to a private bet and returns to it after
   expect(inviteBody).toContain(condition);
   expect(inviteBody).toContain("Loser brings coffee next week.");
   expect(inviteBody).toContain(creatorEmail);
+  expect(inviteBody).toContain(`Google account that uses ${inviteeEmail}`);
   const rawInvitationUrl = inviteBody.match(/https?:\/\/[^\s<"]+\/bets\/[a-f0-9]{24}/)?.[0];
   expect(rawInvitationUrl).toBeTruthy();
   const invitedUrl = new URL(rawInvitationUrl!);
@@ -148,10 +120,9 @@ test("an unregistered friend is invited to a private bet and returns to it after
   const inviteePage = await inviteeContext.newPage();
   await inviteePage.goto(invitedUrl.toString());
   await expect(inviteePage).toHaveURL(new RegExp(`/login\\?next=.*bets.*${betId}`));
-  const signInMessagesBefore = await messageIds(inviteeEmail);
-  await inviteePage.getByLabel("Email address").fill(inviteeEmail);
-  await inviteePage.getByRole("button", { name: "Send my sign-in code" }).click();
-  await finishEmailSignIn(inviteePage, inviteeEmail, signInMessagesBefore);
+  await authenticatePage(inviteePage, inviteeEmail);
+  await inviteePage.goto(invitedUrl.toString());
+  await completeOnboarding(inviteePage, inviteeEmail);
   await expect(inviteePage).toHaveURL(invitedUrl.toString());
   await expect(inviteePage.getByRole("heading", { name: condition })).toBeVisible();
   await expect(inviteePage.getByRole("listitem").filter({ hasText: inviteeEmail })).toBeVisible();
