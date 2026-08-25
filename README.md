@@ -47,14 +47,14 @@ For separate terminals, export the two `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` variabl
 ## Authentication and data flow
 
 1. The login page asks Supabase to start Google OAuth with a PKCE callback to `/auth/callback`.
-2. Google returns through Supabase; the application callback exchanges the one-time code for an HTTP-only cookie session and accepts only an internal `next` destination.
-3. `currentUser()` validates the Supabase session and upserts the normalized email and Google display name in MongoDB.
-4. Server pages protect `/`, `/bets/[id]`, and `/admin`; API routes independently repeat authentication and authorization checks.
+2. Google returns through Supabase; the application callback exchanges the one-time code for an HTTP-only cookie session and upserts the normalized email and Google display name in MongoDB.
+3. New accounts confirm their visible name on `/profile`; safe invitation destinations resume after setup.
+4. `currentUser()` validates subsequent sessions. Server pages protect `/`, `/bets/[id]`, `/admin`, and `/profile`; API routes independently repeat authentication and authorization checks.
 5. The dashboard calls `/api/bets` and `/api/activities`. Bet changes create records in the `activities` collection.
 
 MongoDB uses three collections:
 
-- `appUsers`: email, display name, and role
+- `appUsers`: email, visible name, role, and onboarding state
 - `bets`: creator, participants, terms, deadline, status, and outcome note
 - `activities`: user-visible audit entries for bet and admin actions
 

@@ -115,7 +115,7 @@ export default function Dashboard({ user }: { user: User }) {
     refresh();
   }
 
-  return <main className="shell"><header><a className="brand" href="/">STAKEOUT</a><div className="profile"><span>{user.name || user.email}</span>{user.role === "admin" && <a href="/admin">Admin</a>}<form action="/api/auth/signout" method="post"><button className="text-button">Sign out</button></form></div></header>
+  return <main className="shell"><header><a className="brand" href="/">STAKEOUT</a><div className="profile"><a className="profile-name" href="/profile">{user.name || user.email}</a>{user.role === "admin" && <a href="/admin">Admin</a>}<form action="/api/auth/signout" method="post"><button className="text-button">Sign out</button></form></div></header>
     <section className="hero"><div><p className="eyebrow">YOUR BETS</p><h1>Keep the score.</h1><p>Every friendly wager, clear and accounted for.</p></div><button className="primary" onClick={() => { setShowForm(true); setNotice(""); }}>+ New bet</button></section>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}

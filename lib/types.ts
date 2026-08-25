@@ -2,7 +2,15 @@ import type { ObjectId } from "mongodb";
 
 export type Role = "user" | "admin";
 export type BetStatus = "open" | "completed" | "cancelled" | "unresolved";
-export interface AppUser { _id: ObjectId; email: string; name?: string; role: Role; createdAt: Date }
+export interface AppUser {
+  _id: ObjectId;
+  email: string;
+  name?: string;
+  role: Role;
+  onboardingPending?: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
 export interface Bet {
   _id: ObjectId; creatorId: ObjectId; participantIds: ObjectId[];
   participantEmails?: string[];

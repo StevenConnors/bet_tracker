@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
-import { authenticatePage, signIn } from "./auth-helper";
+import { authenticatePage, completeOnboarding, signIn } from "./auth-helper";
 
 type MessageSummary = { ID: string; Subject?: string; To?: { Address: string }[] };
 
@@ -122,6 +122,7 @@ test("an unregistered friend is invited to a private bet and returns to it after
   await expect(inviteePage).toHaveURL(new RegExp(`/login\\?next=.*bets.*${betId}`));
   await authenticatePage(inviteePage, inviteeEmail);
   await inviteePage.goto(invitedUrl.toString());
+  await completeOnboarding(inviteePage, inviteeEmail);
   await expect(inviteePage).toHaveURL(invitedUrl.toString());
   await expect(inviteePage.getByRole("heading", { name: condition })).toBeVisible();
   await expect(inviteePage.getByRole("listitem").filter({ hasText: inviteeEmail })).toBeVisible();

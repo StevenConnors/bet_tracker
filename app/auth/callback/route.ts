@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { ensureAppUser } from "@/lib/auth-helpers";
 import { safeNext } from "@/lib/auth/redirect";
+import { needsProfileSetup, profileSetupPath } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -9,8 +11,12 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, requestUrl.origin), 303);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      const user = data.user ? await ensureAppUser(data.user) : null;
+      const destination = user && needsProfileSetup(user) ? profileSetupPath(next) : next;
+      return NextResponse.redirect(new URL(destination, requestUrl.origin), 303);
+    }
   }
 
   const login = new URL("/login", requestUrl.origin);

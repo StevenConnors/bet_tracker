@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { authenticatePage } from "./auth-helper";
+import { authenticatePage, completeOnboarding } from "./auth-helper";
 
 test("protected pages redirect signed-out visitors without exposing content", async ({ page }) => {
   await page.goto("/");
@@ -8,6 +8,9 @@ test("protected pages redirect signed-out visitors without exposing content", as
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByText("Admin control.")).toHaveCount(0);
+  await page.goto("/profile");
+  await expect(page).toHaveURL(/\/login\?next=%2Fprofile$/);
+  await expect(page.getByText("Make it yours.")).toHaveCount(0);
 });
 
 test("login starts Google OAuth with a safe callback destination", async ({ page }) => {
@@ -25,14 +28,22 @@ test("a failed OAuth callback returns to a generic login error", async ({ page }
   await expect(page.locator(".error[role=alert]")).toHaveText("Google sign-in was cancelled or could not be completed.");
 });
 
-test("an authenticated session persists across refresh and signs out", async ({ page }) => {
+test("a new session onboards and later updates its visible profile name", async ({ page }) => {
   const email = `oauth-${Date.now()}@example.test`;
   await authenticatePage(page, email);
   await page.goto("/");
+  await completeOnboarding(page, "OAuth Pal");
   await expect(page.getByText("Keep the score.")).toBeVisible();
-  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "OAuth Pal" })).toHaveAttribute("href", "/profile");
   await page.reload();
   await expect(page.getByText("Keep the score.")).toBeVisible();
+  await page.getByRole("link", { name: "OAuth Pal" }).click();
+  await expect(page.getByRole("heading", { name: "Make it yours." })).toBeVisible();
+  await page.getByLabel("Visible name").fill("OAuth Buddy");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status")).toHaveText("Your visible name has been updated.");
+  await page.getByRole("link", { name: "Back to your bets" }).click();
+  await expect(page.getByRole("link", { name: "OAuth Buddy" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/");
@@ -40,7 +51,10 @@ test("an authenticated session persists across refresh and signs out", async ({ 
 });
 
 test("authenticated visitors are redirected away from login", async ({ page }) => {
-  await authenticatePage(page, `already-signed-in-${Date.now()}@example.test`);
+  const email = `already-signed-in-${Date.now()}@example.test`;
+  await authenticatePage(page, email);
+  await page.goto("/");
+  await completeOnboarding(page, email);
   await page.goto("/login");
   await expect(page).toHaveURL("http://127.0.0.1:3100/");
 });
