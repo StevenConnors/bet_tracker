@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ObjectId } from "mongodb";
-import { canReadBet, sameEmailSet } from "./bets";
+import { canReadBet, resolveBetParticipants, sameEmailSet } from "./bets";
 import type { AppUser, Bet } from "./types";
 
 const creatorId = new ObjectId();
@@ -39,5 +39,17 @@ describe("confirmation snapshot", () => {
   it("compares invited email sets independent of order and duplicates", () => {
     expect(sameEmailSet(["b@example.test", "a@example.test", "a@example.test"], ["a@example.test", "b@example.test"])).toBe(true);
     expect(sameEmailSet(["a@example.test"], ["b@example.test"])).toBe(false);
+  });
+});
+
+describe("participant presentation", () => {
+  it("uses the current username from a stable participant ID", () => {
+    const creator = { ...user(creatorId, "creator@example.test"), username: "creator" };
+    const friend = { ...user(registeredParticipantId, "friend@example.test"), name: "Friendly Name", username: "new_username" };
+    const participants = resolveBetParticipants({ ...bet, participantEmails: [] }, [creator, friend]);
+    expect(participants).toEqual([
+      expect.objectContaining({ id: creatorId.toString(), username: "creator" }),
+      expect.objectContaining({ id: registeredParticipantId.toString(), username: "new_username" }),
+    ]);
   });
 });

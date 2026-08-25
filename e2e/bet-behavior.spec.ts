@@ -29,7 +29,7 @@ test("empty states, composer controls, validation, duplicate emails, and overdue
   await creator.page.getByLabel("What needs to happen?").fill("Duplicate participant normalization");
   await creator.page.getByLabel("What’s at stake?").fill("Coffee");
   await creator.page.getByLabel("Deadline").fill("2030-12-31T12:00");
-  await creator.page.getByLabel("Friends’ emails Separate multiple addresses with commas.").fill(` INVITED-${unique}@EXAMPLE.TEST, invited-${unique}@example.test, ${creatorEmail}`);
+  await creator.page.getByLabel("Invite someone new by email Optional. Separate multiple addresses with commas.").fill(` INVITED-${unique}@EXAMPLE.TEST, invited-${unique}@example.test, ${creatorEmail}`);
   await creator.page.getByRole("button", { name: "Review bet" }).click();
   await expect(creator.page.getByRole("listitem")).toHaveCount(1);
   await expect(creator.page.getByRole("listitem")).toContainText(`invited-${unique}@example.test`);

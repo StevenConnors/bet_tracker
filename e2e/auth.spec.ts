@@ -11,6 +11,9 @@ test("protected pages redirect signed-out visitors without exposing content", as
   await page.goto("/profile");
   await expect(page).toHaveURL(/\/login\?next=%2Fprofile$/);
   await expect(page.getByText("Make it yours.")).toHaveCount(0);
+  await page.goto("/friends");
+  await expect(page).toHaveURL(/\/login\?next=%2Ffriends$/);
+  await expect(page.getByRole("heading", { name: "Friends." })).toHaveCount(0);
 });
 
 test("login starts Google OAuth with a safe callback destination", async ({ page }) => {
@@ -30,9 +33,11 @@ test("a failed OAuth callback returns to a generic login error", async ({ page }
 
 test("a new session onboards and later updates its visible profile name", async ({ page }) => {
   const email = `oauth-${Date.now()}@example.test`;
+  const firstUsername = `oauth_${Date.now().toString(36)}`;
+  const nextUsername = `buddy_${Date.now().toString(36)}`;
   await authenticatePage(page, email);
   await page.goto("/");
-  await completeOnboarding(page, "OAuth Pal");
+  await completeOnboarding(page, "OAuth Pal", firstUsername);
   await expect(page.getByText("Keep the score.")).toBeVisible();
   await expect(page.getByRole("link", { name: "OAuth Pal" })).toHaveAttribute("href", "/profile");
   await page.reload();
@@ -40,8 +45,10 @@ test("a new session onboards and later updates its visible profile name", async 
   await page.getByRole("link", { name: "OAuth Pal" }).click();
   await expect(page.getByRole("heading", { name: "Make it yours." })).toBeVisible();
   await page.getByLabel("Visible name").fill("OAuth Buddy");
+  await page.getByLabel("Username").fill(nextUsername);
   await page.getByRole("button", { name: "Save changes" }).click();
-  await expect(page.getByRole("status")).toHaveText("Your visible name has been updated.");
+  await expect(page.getByRole("status")).toHaveText("Your profile has been updated.");
+  await expect(page.getByLabel("Username")).toHaveValue(nextUsername);
   await page.getByRole("link", { name: "Back to your bets" }).click();
   await expect(page.getByRole("link", { name: "OAuth Buddy" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();

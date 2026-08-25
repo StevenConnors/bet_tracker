@@ -31,7 +31,7 @@ async function fillBet(page: Page, condition: string, participantEmail: string) 
   await page.getByLabel("What needs to happen?").fill(condition);
   await page.getByLabel("What’s at stake?").fill("Loser brings coffee next week.");
   await page.getByLabel("Deadline").fill("2030-12-31T12:00");
-  await page.getByLabel("Friends’ emails Separate multiple addresses with commas.").fill(participantEmail);
+  await page.getByLabel("Invite someone new by email Optional. Separate multiple addresses with commas.").fill(participantEmail);
   await page.getByRole("button", { name: "Review bet" }).click();
   await expect(page.getByRole("heading", { name: "Review your bet" })).toBeVisible();
 }
