@@ -50,13 +50,14 @@ For separate terminals, run `npx supabase start -x studio,imgproxy,storage-api,r
 
 1. Supabase verifies the login code or link and stores the session in cookies.
 2. `currentUser()` validates the session and upserts the user in MongoDB.
-3. Server pages protect `/` and `/admin`; API routes repeat authorization checks.
-4. The dashboard calls `/api/bets` and `/api/activities`.
-5. Bet changes create records in the `activities` collection.
+3. New accounts confirm their visible name on `/profile`; safe invitation destinations resume after setup.
+4. Server pages protect `/`, `/admin`, and `/profile`; API routes repeat authorization checks.
+5. The dashboard calls `/api/bets` and `/api/activities`.
+6. Bet changes create records in the `activities` collection.
 
 MongoDB uses three collections:
 
-- `appUsers`: email, display name, and role
+- `appUsers`: email, visible name, role, and onboarding state
 - `bets`: creator, participants, terms, deadline, status, and outcome note
 - `activities`: user-visible audit entries for bet and admin actions
 

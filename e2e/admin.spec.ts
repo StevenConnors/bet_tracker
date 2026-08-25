@@ -29,6 +29,9 @@ async function signIn(browser: Browser, email: string) {
   url.host = "127.0.0.1:3100";
   await page.goto(url.toString());
   await page.getByRole("button", { name: "Continue to Stakeout" }).click();
+  await expect(page.getByRole("heading", { name: "What should we call you?" })).toBeVisible();
+  await page.getByLabel("Visible name").fill(email);
+  await page.getByRole("button", { name: "Save and continue" }).click();
   await expect(page.getByText("Keep the score.")).toBeVisible();
   return { context, page };
 }

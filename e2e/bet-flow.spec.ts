@@ -38,6 +38,9 @@ async function finishEmailSignIn(page: Page, email: string, existing: Set<string
   await page.goto(link.toString());
   await expect(page.getByText("Ready to sign in?")).toBeVisible();
   await page.getByRole("button", { name: "Continue to Stakeout" }).click();
+  await expect(page.getByRole("heading", { name: "What should we call you?" })).toBeVisible();
+  await page.getByLabel("Visible name").fill(email);
+  await page.getByRole("button", { name: "Save and continue" }).click();
 }
 
 async function signIn(browser: Browser, email: string) {

@@ -29,6 +29,13 @@ function messageBody(message: { HTML?: string; Text?: string }) {
   return `${message.HTML || ""}\n${message.Text || ""}`.replace(/&amp;/g, "&");
 }
 
+async function completeOnboarding(page: Page, name: string) {
+  await expect(page.getByRole("heading", { name: "What should we call you?" })).toBeVisible();
+  await expect(page).toHaveURL(/\/profile\?next=/);
+  await page.getByLabel("Visible name").fill(name);
+  await page.getByRole("button", { name: "Save and continue" }).click();
+}
+
 test("protected pages redirect signed-out visitors without exposing content", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login$/);
@@ -36,6 +43,9 @@ test("protected pages redirect signed-out visitors without exposing content", as
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/login/);
   await expect(page.getByText("Admin control.")).toHaveCount(0);
+  await page.goto("/profile");
+  await expect(page).toHaveURL(/\/login\?next=%2Fprofile$/);
+  await expect(page.getByText("Make it yours.")).toHaveCount(0);
 });
 
 test("the OTP form constrains input and rejects an invalid code generically", async ({ page }) => {
@@ -53,7 +63,7 @@ test("the OTP form constrains input and rejects an invalid code generically", as
   await expect(page).toHaveURL(/\/login\/verify/);
 });
 
-test("a six-digit email code signs in, persists across refresh, and signs out", async ({ page }) => {
+test("a six-digit email code onboards a profile, persists across refresh, and signs out", async ({ page }) => {
   const email = `otp-${Date.now()}@example.test`;
   const message = await requestCode(page, email);
   const body = messageBody(message);
@@ -61,9 +71,18 @@ test("a six-digit email code signs in, persists across refresh, and signs out", 
   expect(token).toBeTruthy();
   await page.getByLabel("Six-digit code").fill(token!);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await completeOnboarding(page, "OTP Pal");
   await expect(page.getByText("Keep the score.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "OTP Pal" })).toHaveAttribute("href", "/profile");
   await page.reload();
   await expect(page.getByText("Keep the score.")).toBeVisible();
+  await page.getByRole("link", { name: "OTP Pal" }).click();
+  await expect(page.getByRole("heading", { name: "Make it yours." })).toBeVisible();
+  await page.getByLabel("Visible name").fill("OTP Buddy");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status")).toHaveText("Your visible name has been updated.");
+  await page.getByRole("link", { name: "Back to your bets" }).click();
+  await expect(page.getByRole("link", { name: "OTP Buddy" })).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.goto("/");
@@ -85,6 +104,7 @@ test("a review link authenticates only after confirmation and cannot be reused",
   await expect(page).toHaveURL(/\/login$/);
   await page.goto(localLink.toString());
   await page.getByRole("button", { name: "Continue to Stakeout" }).click();
+  await completeOnboarding(page, "Review Link User");
   await expect(page.getByText("Keep the score.")).toBeVisible();
 
   const second = await browser.newContext();
@@ -105,6 +125,7 @@ test("login normalizes email, offers another-email navigation, and rejects exter
   const token = messageBody(message).match(/\b\d{6}\b/)?.[0];
   await page.getByLabel("Six-digit code").fill(token!);
   await page.getByRole("button", { name: "Sign in" }).click();
+  await completeOnboarding(page, email);
   await expect(page).toHaveURL("http://127.0.0.1:3100/");
   await expect(page.getByText(email, { exact: true })).toBeVisible();
 });
